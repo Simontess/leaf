@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Leaflet — a fast notepad</title>
+<meta name="description" content="A fast, offline-first notepad for capturing and organizing notes.">
+<meta name="theme-color" content="#2F6F5E">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-64.png" sizes="64x64" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Leaflet">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+  :root{
+    --bg:#F5F4F0; --surface:#FFFFFF; --surface-2:#ECEAE3; --border:#DEDCD3;
+    --ink:#23262B; --ink-soft:#6B6F76; --ink-faint:#9A9D9F;
+    --accent:#2F6F5E; --accent-soft:#E1EDE8; --accent-ink:#1E4B3F;
+    --gold:#B8862B; --gold-soft:#F3E8D2;
+    --danger:#B23A3A; --danger-soft:#F5E1E1;
+    --rule:#E4DFCF;
+    --shadow: 0 1px 2px rgba(30,28,20,0.06), 0 1px 1px rgba(30,28,20,0.04);
+    --radius: 7px;
+    --editor-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  html.dark{
+    --bg:#1B1D1E; --surface:#232527; --surface-2:#2A2C2E; --border:#3A3C3E;
+    --ink:#E9E7E1; --ink-soft:#A3A6A8; --ink-faint:#75787A;
+    --accent:#5AB89C; --accent-soft:#1E3630; --accent-ink:#8CD4BC;
+    --gold:#D9A94A; --gold-soft:#3A331F;
+    --danger:#E58080; --danger-soft:#3A2323;
+    --shadow: 0 1px 3px rgba(0,0,0,0.35);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  html,body{height:100%;}
+  body{
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:var(--bg); color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit; cursor:pointer;}
+  input, select, textarea{font-family:inherit; color:inherit;}
+
+  .app{ display:grid; grid-template-columns: 210px 260px 1fr; height:100vh; }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    background:var(--surface-2); border-right:1px solid var(--border);
+    display:flex; flex-direction:column; padding:16px 10px; gap:2px; overflow-y:auto;
+  }
+  .brand{
+    font-size:15px; font-weight:700; letter-spacing:0.01em; color:var(--ink);
+    padding:2px 8px 14px 8px; display:flex; align-items:center; gap:8px;
+  }
+  .brand .mark{
+    width:18px; height:18px; border-radius:4px; background:var(--accent);
+    position:relative; flex:none;
+  }
+  .brand .mark::after{
+    content:""; position:absolute; left:4px; right:4px; top:5px; height:2px; background:var(--surface-2);
+    box-shadow: 0 4px 0 var(--surface-2), 0 8px 0 var(--surface-2);
+  }
+  .newnote-btn{
+    display:flex; align-items:center; gap:8px; width:100%; padding:9px 10px; margin-bottom:14px;
+    background:var(--accent); color:#fff; border:none; border-radius:var(--radius);
+    font-size:13.5px; font-weight:600;
+  }
+  .newnote-btn:hover{ filter:brightness(1.06); }
+  .sidebar-section{ margin-top:10px; }
+  .sidebar-label{ font-size:11px; color:var(--ink-faint); padding:4px 8px; font-weight:600; letter-spacing:0.02em; }
+  .nav-item{
+    display:flex; align-items:center; justify-content:space-between; gap:6px;
+    padding:6.5px 8px; border-radius:6px; font-size:13.5px; color:var(--ink-soft);
+    background:transparent; border:none; text-align:left; width:100%;
+  }
+  .nav-item:hover{ background:var(--surface); color:var(--ink); }
+  .nav-item.active{ background:var(--accent-soft); color:var(--accent-ink); font-weight:600; }
+  .nav-item .count{ font-size:11px; color:var(--ink-faint); }
+  .nav-item.active .count{ color:var(--accent-ink); opacity:0.7; }
+  .folder-dot{ width:7px; height:7px; border-radius:50%; background:var(--ink-faint); flex:none; margin-right:7px; }
+  .tag-chip{
+    display:inline-flex; align-items:center; padding:3px 9px; margin:3px 4px 0 0; border-radius:20px;
+    font-size:11.5px; background:var(--surface); border:1px solid var(--border); color:var(--ink-soft);
+  }
+  .tag-chip.active{ background:var(--gold-soft); border-color:var(--gold); color:var(--gold); }
+  .sidebar-footer{ margin-top:auto; padding-top:10px; border-top:1px solid var(--border); }
+  .theme-toggle{
+    display:flex; align-items:center; gap:8px; width:100%; padding:7px 8px; border-radius:6px;
+    background:transparent; border:none; font-size:13px; color:var(--ink-soft);
+  }
+  .theme-toggle:hover{ background:var(--surface); }
+
+  /* ---------- Notes list ---------- */
+  .list-pane{ background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; min-width:0; }
+  .list-header{ padding:14px 14px 8px 14px; }
+  .search-box{
+    display:flex; align-items:center; gap:7px; background:var(--surface-2); border:1px solid var(--border);
+    border-radius:7px; padding:7px 10px;
+  }
+  .search-box input{ border:none; background:transparent; outline:none; font-size:13.5px; width:100%; color:var(--ink); }
+  .search-box svg{ flex:none; opacity:0.55; }
+  .list-controls{ display:flex; align-items:center; justify-content:space-between; padding:8px 14px 4px 14px; }
+  .list-title{ font-size:12.5px; font-weight:700; color:var(--ink-soft); }
+  .sort-select{
+    border:1px solid var(--border); background:var(--surface); color:var(--ink-soft); font-size:11.5px;
+    border-radius:5px; padding:3px 6px;
+  }
+  .notes-list{ overflow-y:auto; flex:1; padding:4px 8px 8px 8px; }
+  .note-card{
+    padding:10px 10px; border-radius:7px; margin-bottom:3px; cursor:pointer; border:1px solid transparent;
+    position:relative;
+  }
+  .note-card:hover{ background:var(--surface-2); }
+  .note-card.active{ background:var(--accent-soft); border-color:var(--accent); }
+  .note-card-top{ display:flex; align-items:baseline; justify-content:space-between; gap:6px; }
+  .note-card-title{ font-size:13.5px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .note-card.active .note-card-title{ color:var(--accent-ink); }
+  .note-card-pin{ color:var(--gold); flex:none; }
+  .note-card-snippet{
+    font-size:12px; color:var(--ink-soft); margin-top:3px; overflow:hidden; text-overflow:ellipsis;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.4;
+  }
+  .note-card-meta{ display:flex; align-items:center; gap:6px; margin-top:6px; font-size:10.5px; color:var(--ink-faint); font-variant-numeric:tabular-nums; }
+  .note-card-folder{ background:var(--surface-2); border-radius:4px; padding:1px 6px; }
+  .empty-list{ padding:30px 18px; text-align:center; color:var(--ink-faint); font-size:13px; line-height:1.6; }
+
+  /* ---------- Editor ---------- */
+  .editor-pane{ display:flex; flex-direction:column; min-width:0; background:var(--bg); }
+  .editor-toolbar{
+    display:flex; align-items:center; gap:2px; padding:8px 14px; border-bottom:1px solid var(--border);
+    background:var(--surface); flex-wrap:wrap;
+  }
+  .tb-btn{
+    display:flex; align-items:center; justify-content:center; width:29px; height:29px; border-radius:6px;
+    background:transparent; border:none; color:var(--ink-soft);
+  }
+  .tb-btn:hover{ background:var(--surface-2); color:var(--ink); }
+  .tb-btn.on{ background:var(--accent-soft); color:var(--accent-ink); }
+  .tb-sep{ width:1px; height:18px; background:var(--border); margin:0 6px; }
+  .tb-spacer{ flex:1; }
+  .save-indicator{ font-size:11.5px; color:var(--ink-faint); margin-right:10px; display:flex; align-items:center; gap:5px; }
+  .save-dot{ width:6px; height:6px; border-radius:50%; background:var(--ink-faint); }
+  .save-dot.saving{ background:var(--gold); }
+  .save-dot.saved{ background:var(--accent); }
+
+  .editor-titlebar{ padding:16px 28px 0 28px; }
+  .editor-title-input{
+    width:100%; border:none; outline:none; background:transparent; font-size:23px; font-weight:700;
+    color:var(--ink); font-family: var(--editor-font);
+  }
+  .editor-title-input::placeholder{ color:var(--ink-faint); font-weight:600; }
+  .editor-tagsline{ display:flex; align-items:center; gap:8px; padding:6px 28px 10px 28px; flex-wrap:wrap; }
+  .meta-input{
+    border:1px dashed var(--border); background:transparent; border-radius:5px; font-size:11.5px;
+    color:var(--ink-soft); padding:3px 8px; outline:none;
+  }
+  .meta-input:focus{ border-color:var(--accent); border-style:solid; }
+  .editor-body-wrap{ flex:1; overflow:hidden; display:flex; }
+  .gutter{
+    width:42px; flex:none; text-align:right; padding:14px 8px 14px 0; font-size:12.5px;
+    color:var(--ink-faint); overflow:hidden; font-variant-numeric:tabular-nums; user-select:none;
+    border-right:1px solid var(--border); font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .editor-scroll{ flex:1; overflow-y:auto; padding:6px 28px 28px 28px; }
+  .editor-textarea{
+    width:100%; height:100%; min-height:60vh; border:none; outline:none; resize:none; background:transparent;
+    color:var(--ink); font-size:15px; line-height:1.7; font-family:var(--editor-font);
+  }
+  .editor-textarea.nowrap{ white-space:pre; overflow-x:auto; }
+  .editor-textarea.ruled{
+    background-image: repeating-linear-gradient(var(--bg), var(--bg) calc(1.7em - 1px), var(--rule2, var(--border)) calc(1.7em - 1px), var(--rule2, var(--border)) 1.7em);
+    background-attachment:local;
+  }
+  .preview{ font-size:15px; line-height:1.75; color:var(--ink); font-family:var(--editor-font); }
+  .preview h1,.preview h2,.preview h3{ line-height:1.3; margin:0.9em 0 0.35em 0; }
+  .preview h1{ font-size:1.5em; } .preview h2{ font-size:1.25em; } .preview h3{ font-size:1.1em; }
+  .preview p{ margin:0.6em 0; }
+  .preview ul{ padding-left:1.3em; }
+  .preview code{ background:var(--surface-2); padding:1px 5px; border-radius:4px; font-size:0.9em; font-family: ui-monospace, monospace; }
+  .preview blockquote{ margin:0.6em 0; padding:2px 14px; border-left:3px solid var(--accent); color:var(--ink-soft); }
+  .preview a{ color:var(--accent-ink); }
+  .preview .todo{ list-style:none; margin-left:-1.3em; display:flex; gap:8px; align-items:flex-start; cursor:pointer; }
+  .preview .todo input{ margin-top:5px; }
+  .preview .todo.done{ color:var(--ink-faint); text-decoration:line-through; }
+
+  .status-bar{
+    display:flex; align-items:center; gap:14px; padding:6px 28px; border-top:1px solid var(--border);
+    background:var(--surface); font-size:11px; color:var(--ink-faint); font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .empty-editor{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+    color:var(--ink-faint); text-align:center; padding:20px;
+  }
+  .empty-editor .mark-lg{ width:44px; height:44px; border-radius:11px; background:var(--surface-2); position:relative; }
+  .empty-editor .mark-lg::after{
+    content:""; position:absolute; left:11px; right:11px; top:14px; height:2.5px; background:var(--border);
+    box-shadow: 0 8px 0 var(--border), 0 16px 0 var(--border);
+  }
+  .empty-editor .hint{ font-size:12.5px; }
+  .empty-editor kbd{ background:var(--surface-2); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:11px; }
+
+  /* ---------- Overlays ---------- */
+  .modal-backdrop{ position:fixed; inset:0; background:rgba(20,18,12,0.35); display:flex; align-items:center; justify-content:center; z-index:50; }
+  .modal{ background:var(--surface); border-radius:10px; padding:20px; width:320px; box-shadow: 0 12px 32px rgba(0,0,0,0.25); border:1px solid var(--border); }
+  .modal h3{ margin:0 0 6px 0; font-size:15px; }
+  .modal p{ margin:0 0 16px 0; font-size:13px; color:var(--ink-soft); line-height:1.5; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; }
+  .btn{ padding:7px 14px; border-radius:6px; border:1px solid var(--border); background:var(--surface); font-size:13px; color:var(--ink); }
+  .btn:hover{ background:var(--surface-2); }
+  .btn.primary{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .btn.danger{ background:var(--danger); color:#fff; border-color:var(--danger); }
+
+  .toast{
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg);
+    padding:9px 16px; border-radius:7px; font-size:12.5px; z-index:60; opacity:0; pointer-events:none;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  html.dark .toast{ background:var(--surface-2); color:var(--ink); border:1px solid var(--border); }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(-4px); }
+
+  .font-size-ctl{ display:flex; align-items:center; gap:4px; }
+  .font-size-ctl span{ font-size:11.5px; color:var(--ink-faint); width:22px; text-align:center; }
+
+  /* ---------- Mobile ---------- */
+  .mobile-topbar{ display:none; }
+  @media (max-width: 880px){
+    .app{ grid-template-columns: 1fr; }
+    .sidebar, .list-pane, .editor-pane{ grid-column:1; grid-row:1; }
+    .sidebar, .list-pane, .editor-pane{ display:none; }
+    .app[data-view="folders"] .sidebar{ display:flex; }
+    .app[data-view="list"] .list-pane{ display:flex; }
+    .app[data-view="editor"] .editor-pane{ display:flex; }
+    .sidebar, .list-pane{ width:100%; height:100vh; border-right:none; }
+    .mobile-topbar{
+      display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--border);
+      background:var(--surface);
+    }
+    .mobile-back{ background:none; border:none; color:var(--accent); font-size:13.5px; display:flex; align-items:center; gap:2px; padding:4px; }
+    .editor-titlebar, .editor-tagsline{ padding-left:16px; padding-right:16px; }
+    .editor-scroll{ padding-left:16px; padding-right:16px; }
+    .status-bar{ padding-left:16px; padding-right:16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app" data-view="list">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="mobile-topbar"><span style="font-weight:700;font-size:14px;">Leaflet</span></div>
+    <div class="brand"><div class="mark"></div>Leaflet</div>
+    <button class="newnote-btn" id="btnNewNote">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+      New note
+    </button>
+
+    <div class="sidebar-section">
+      <button class="nav-item" data-view-filter="all"><span>All notes</span><span class="count" id="countAll">0</span></button>
+      <button class="nav-item" data-view-filter="pinned"><span>Pinned</span><span class="count" id="countPinned">0</span></button>
+      <button class="nav-item" data-view-filter="trash"><span>Trash</span><span class="count" id="countTrash">0</span></button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Folders</div>
+      <div id="folderList"></div>
+    </div>
+
+    <div class="sidebar-section" id="tagSection" style="display:none;">
+      <div class="sidebar-label">Tags</div>
+      <div id="tagList" style="padding:2px 6px;"></div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="theme-toggle" id="btnTheme">
+        <svg id="themeIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <span id="themeLabel">Dark mode</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- LIST -->
+  <div class="list-pane" id="listPane">
+    <div class="mobile-topbar">
+      <button class="mobile-back" data-go="folders">‹ Folders</button>
+    </div>
+    <div class="list-header">
+      <div class="search-box">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="searchInput" placeholder="Search all notes…" autocomplete="off">
+      </div>
+    </div>
+    <div class="list-controls">
+      <div class="list-title" id="listTitle">All notes</div>
+      <select class="sort-select" id="sortSelect">
+        <option value="modified">Modified</option>
+        <option value="created">Created</option>
+        <option value="name">Name A–Z</option>
+      </select>
+    </div>
+    <div class="notes-list" id="notesList"></div>
+  </div>
+
+  <!-- EDITOR -->
+  <div class="editor-pane" id="editorPane">
+    <div class="mobile-topbar">
+      <button class="mobile-back" data-go="list">‹ Notes</button>
+    </div>
+    <div id="editorEmpty" class="empty-editor">
+      <div class="mark-lg"></div>
+      <div style="font-weight:600; color:var(--ink-soft); font-size:14.5px;">No note selected</div>
+      <div class="hint">Press <kbd>Ctrl</kbd>+<kbd>N</kbd> or pick a note from the list</div>
+    </div>
+
+    <div id="editorContent" style="display:none; flex-direction:column; height:100%;">
+      <div class="editor-toolbar">
+        <button class="tb-btn" id="tbBold" title="Bold (Ctrl+B)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M6 4h7a3.5 3.5 0 010 7H6zM6 11h8a3.5 3.5 0 010 7H6z"/></svg></button>
+        <button class="tb-btn" id="tbItalic" title="Italic (Ctrl+I)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M11 4h6M5 20h6M14 4l-4 16"/></svg></button>
+        <button class="tb-btn" id="tbHeader" title="Heading"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M6 4v16M18 4v16M6 12h12"/></svg></button>
+        <button class="tb-btn" id="tbList" title="Bulleted list"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/><path d="M9 6h11M9 12h11M9 18h11"/></svg></button>
+        <button class="tb-btn" id="tbCheck" title="Checklist"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="4" y="4.5" width="6" height="6" rx="1.2"/><path d="M5.3 7.5l1 1 1.6-2M4 16.5h6M13 6.5h7M13 16.5h7"/></svg></button>
+        <div class="tb-sep"></div>
+        <button class="tb-btn" id="tbPreview" title="Toggle preview">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+        <button class="tb-btn" id="tbWrap" title="Toggle word wrap"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M4 6h16M4 12h12a3 3 0 010 6H12l2-2M4 18h4"/></svg></button>
+        <button class="tb-btn" id="tbLines" title="Toggle line numbers"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="0.6" fill="currentColor"/><circle cx="4.5" cy="12" r="0.6" fill="currentColor"/><circle cx="4.5" cy="18" r="0.6" fill="currentColor"/></svg></button>
+        <div class="font-size-ctl">
+          <button class="tb-btn" id="fontMinus" title="Smaller text">–</button>
+          <span id="fontSizeLabel">15</span>
+          <button class="tb-btn" id="fontPlus" title="Larger text">+</button>
+        </div>
+        <select class="sort-select" id="fontFamilySelect" title="Font">
+          <option value="sans">Sans</option>
+          <option value="serif">Serif</option>
+          <option value="mono">Mono</option>
+        </select>
+        <div class="tb-spacer"></div>
+        <div class="save-indicator"><span class="save-dot" id="saveDot"></span><span id="saveLabel">Saved</span></div>
+        <button class="tb-btn" id="tbPin" title="Pin note"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 2l1.5 5.5L19 9l-4 3.5L16 18l-4-3-4 3 1-5.5-4-3.5 5.5-1.5z"/></svg></button>
+        <button class="tb-btn" id="tbExport" title="Export note"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>
+        <button class="tb-btn" id="tbDelete" title="Delete note"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/></svg></button>
+      </div>
+
+      <div class="editor-titlebar">
+        <input class="editor-title-input" id="titleInput" placeholder="Untitled note">
+      </div>
+      <div class="editor-tagsline">
+        <input class="meta-input" id="folderInput" placeholder="Folder">
+        <input class="meta-input" id="tagsInput" placeholder="tags, comma, separated" style="flex:1; min-width:120px;">
+      </div>
+
+      <div class="editor-body-wrap">
+        <div class="gutter" id="gutter" style="display:none;"></div>
+        <div class="editor-scroll" id="editorScroll">
+          <textarea class="editor-textarea" id="editorTextarea" spellcheck="false" placeholder="Start writing…"></textarea>
+          <div class="preview" id="previewDiv" style="display:none;"></div>
+        </div>
+      </div>
+
+      <div class="status-bar">
+        <span id="wordCount">0 words</span>
+        <span id="charCount">0 chars</span>
+        <span id="updatedAt"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------------- State ----------------
+  const STORAGE_KEY = "notepad-state";
+  const DEFAULT_SETTINGS = { theme:"light", fontFamily:"sans", fontSize:15, wordWrap:true, lineNumbers:false, sortBy:"modified", ruled:false };
+  let state = { notes: [], settings: { ...DEFAULT_SETTINGS } };
+  let activeNoteId = null;
+  let currentFilter = { type:"all", value:null }; // type: all | pinned | trash | folder | tag
+  let searchTerm = "";
+  let previewOn = false;
+  let saveTimer = null;
+  let loaded = false;
+
+  const $ = (id) => document.getElementById(id);
+  const uid = () => "n_" + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+  const now = () => Date.now();
+
+  function fmtDate(ts){
+    const d = new Date(ts);
+    const today = new Date();
+    const sameDay = d.toDateString() === today.toDateString();
+    if(sameDay) return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    return d.toLocaleDateString([], {month:'short', day:'numeric'}) + (d.getFullYear()!==today.getFullYear() ? ", "+d.getFullYear() : "");
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  // ---------------- Persistence (IndexedDB — real on-device offline storage) ----------------
+  const DB_NAME = "leaflet-db", DB_STORE = "kv", DB_VERSION = 1;
+  let dbPromise = null;
+
+  function openDB(){
+    if(dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = () => { req.result.createObjectStore(DB_STORE); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return dbPromise;
+  }
+
+  async function idbGet(key){
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, "readonly");
+      const req = tx.objectStore(DB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function idbSet(key, value){
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  // One-time migration from the old localStorage fallback, if this file was ever
+  // opened as a loose download before IndexedDB was wired up.
+  async function migrateLegacyIfPresent(){
+    try{
+      const legacy = localStorage.getItem(STORAGE_KEY);
+      if(legacy){
+        const existing = await idbGet(STORAGE_KEY);
+        if(!existing) await idbSet(STORAGE_KEY, legacy);
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }catch(e){ /* ignore */ }
+  }
+
+  async function loadState(){
+    try{
+      await migrateLegacyIfPresent();
+      const raw = await idbGet(STORAGE_KEY);
+      if(raw){
+        const parsed = JSON.parse(raw);
+        state.notes = Array.isArray(parsed.notes) ? parsed.notes : [];
+        state.settings = { ...DEFAULT_SETTINGS, ...(parsed.settings||{}) };
+      }
+    }catch(e){
+      // no existing data yet — fine, start fresh
+    }
+    loaded = true;
+    applySettingsToUI();
+    purgeOldTrash();
+    render();
+  }
+
+  function persist(showIndicator){
+    if(showIndicator) setSaveState("saving");
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      try{
+        await idbSet(STORAGE_KEY, JSON.stringify(state));
+        setSaveState("saved");
+      }catch(e){
+        setSaveState("error");
+      }
+    }, 420);
+  }
+
+  function persistNow(){
+    clearTimeout(saveTimer);
+    return idbSet(STORAGE_KEY, JSON.stringify(state)).catch(()=>{});
+  }
+
+  window.addEventListener("beforeunload", () => { persistNow(); });
+
+  function setSaveState(s){
+    const dot = $("saveDot"), label = $("saveLabel");
+    if(!dot) return;
+    dot.className = "save-dot" + (s==="saving" ? " saving" : s==="saved" ? " saved" : "");
+    label.textContent = s==="saving" ? "Saving…" : s==="error" ? "Save failed" : "Saved";
+  }
+
+  function purgeOldTrash(){
+    const THIRTY_DAYS = 30*24*60*60*1000;
+    const t = now();
+    const before = state.notes.length;
+    state.notes = state.notes.filter(n => !(n.deletedAt && (t - n.deletedAt > THIRTY_DAYS)));
+    if(state.notes.length !== before) persist(false);
+  }
+
+  // ---------------- Note ops ----------------
+  function createNote(){
+    const n = {
+      id: uid(), title:"", content:"", folder: currentFilter.type==="folder" ? currentFilter.value : "",
+      tags: currentFilter.type==="tag" ? [currentFilter.value] : [],
+      pinned:false, createdAt: now(), updatedAt: now(), deletedAt:null
+    };
+    state.notes.unshift(n);
+    activeNoteId = n.id;
+    persist(true);
+    render();
+    goView("editor");
+    setTimeout(()=>{ $("titleInput") && $("titleInput").focus(); }, 30);
+  }
+
+  function getNote(id){ return state.notes.find(n => n.id === id); }
+
+  function updateActiveNote(patch){
+    const n = getNote(activeNoteId);
+    if(!n) return;
+    Object.assign(n, patch, { updatedAt: now() });
+    persist(true);
+  }
+
+  function softDelete(id){
+    const n = getNote(id);
+    if(!n) return;
+    n.deletedAt = now();
+    if(activeNoteId === id) { activeNoteId = null; }
+    persist(true);
+    render();
+    goView("list");
+    showToast("Note moved to trash");
+  }
+
+  function restoreNote(id){
+    const n = getNote(id);
+    if(!n) return;
+    n.deletedAt = null;
+    persist(true);
+    render();
+    showToast("Note restored");
+  }
+
+  function permanentlyDelete(id){
+    state.notes = state.notes.filter(n => n.id !== id);
+    if(activeNoteId === id) activeNoteId = null;
+    persist(true);
+    render();
+  }
+
+  function togglePin(id){
+    const n = getNote(id);
+    if(!n) return;
+    n.pinned = !n.pinned;
+    n.updatedAt = now();
+    persist(true);
+    render();
+  }
+
+  // ---------------- Derived data ----------------
+  function activeNotes(){ return state.notes.filter(n => !n.deletedAt); }
+
+  function allFolders(){
+    const set = new Set();
+    activeNotes().forEach(n => { if(n.folder && n.folder.trim()) set.add(n.folder.trim()); });
+    return Array.from(set).sort((a,b)=>a.localeCompare(b));
+  }
+
+  function allTags(){
+    const set = new Set();
+    activeNotes().forEach(n => (n.tags||[]).forEach(t => t && set.add(t)));
+    return Array.from(set).sort((a,b)=>a.localeCompare(b));
+  }
+
+  function filteredNotes(){
+    let list;
+    if(currentFilter.type === "trash") list = state.notes.filter(n => n.deletedAt);
+    else if(currentFilter.type === "pinned") list = activeNotes().filter(n => n.pinned);
+    else if(currentFilter.type === "folder") list = activeNotes().filter(n => (n.folder||"").trim() === currentFilter.value);
+    else if(currentFilter.type === "tag") list = activeNotes().filter(n => (n.tags||[]).includes(currentFilter.value));
+    else list = activeNotes();
+
+    if(searchTerm.trim()){
+      const q = searchTerm.trim().toLowerCase();
+      list = list.filter(n => (n.title||"").toLowerCase().includes(q) || (n.content||"").toLowerCase().includes(q));
+    }
+
+    const sortBy = state.settings.sortBy;
+    list = list.slice().sort((a,b) => {
+      if(currentFilter.type !== "trash"){
+        if(a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      }
+      if(sortBy === "created") return b.createdAt - a.createdAt;
+      if(sortBy === "name") return (a.title||"Untitled").localeCompare(b.title||"Untitled");
+      return b.updatedAt - a.updatedAt;
+    });
+    return list;
+  }
+
+  // ---------------- Markdown (minimal) ----------------
+  function renderMarkdown(src){
+    const lines = escapeHtml(src || "").split("\n");
+    let html = "", inList = false, inCheck = false;
+    function inlineFmt(s){
+      s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+      s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+      s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      return s;
+    }
+    function closeLists(){
+      if(inList){ html += "</ul>"; inList = false; }
+      if(inCheck){ html += "</ul>"; inCheck = false; }
+    }
+    lines.forEach((raw, idx) => {
+      const line = raw;
+      let m;
+      if((m = line.match(/^(#{1,3})\s+(.*)$/))){
+        closeLists();
+        const lvl = m[1].length;
+        html += `<h${lvl}>${inlineFmt(m[2])}</h${lvl}>`;
+      } else if((m = line.match(/^-\s+\[( |x|X)\]\s+(.*)$/))){
+        if(!inCheck){ closeLists(); html += "<ul>"; inCheck = true; }
+        const done = m[1].toLowerCase() === "x";
+        html += `<li class="todo${done?" done":""}" data-line="${idx}"><input type="checkbox" ${done?"checked":""} data-line="${idx}">${inlineFmt(m[2])}</li>`;
+      } else if((m = line.match(/^[-*]\s+(.*)$/))){
+        if(!inList){ closeLists(); html += "<ul>"; inList = true; }
+        html += `<li>${inlineFmt(m[1])}</li>`;
+      } else if((m = line.match(/^>\s?(.*)$/))){
+        closeLists();
+        html += `<blockquote>${inlineFmt(m[1])}</blockquote>`;
+      } else if(line.trim() === ""){
+        closeLists();
+      } else {
+        closeLists();
+        html += `<p>${inlineFmt(line)}</p>`;
+      }
+    });
+    closeLists();
+    return html || '<p style="color:var(--ink-faint)">Nothing to preview yet.</p>';
+  }
+
+  function toggleCheckboxAtLine(lineIdx){
+    const n = getNote(activeNoteId);
+    if(!n) return;
+    const lines = (n.content||"").split("\n");
+    const line = lines[lineIdx];
+    if(!line) return;
+    if(/\[ \]/.test(line)) lines[lineIdx] = line.replace("[ ]", "[x]");
+    else if(/\[x\]/i.test(line)) lines[lineIdx] = line.replace(/\[x\]/i, "[ ]");
+    n.content = lines.join("\n");
+    n.updatedAt = now();
+    $("editorTextarea").value = n.content;
+    persist(true);
+    renderPreview();
+  }
+
+  // ---------------- Rendering ----------------
+  function goView(view){
+    $("app").dataset.view = view;
+  }
+
+  function render(){
+    if(!loaded) return;
+    renderSidebar();
+    renderList();
+    renderEditor();
+  }
+
+  function renderSidebar(){
+    const active = activeNotes();
+    $("countAll").textContent = active.length;
+    $("countPinned").textContent = active.filter(n=>n.pinned).length;
+    $("countTrash").textContent = state.notes.filter(n=>n.deletedAt).length;
+
+    document.querySelectorAll(".nav-item[data-view-filter]").forEach(btn => {
+      btn.classList.toggle("active", currentFilter.type === btn.dataset.viewFilter);
+    });
+
+    const folders = allFolders();
+    const folderList = $("folderList");
+    folderList.innerHTML = "";
+    if(folders.length === 0){
+      const div = document.createElement("div");
+      div.style.cssText = "padding:6px 8px; font-size:12px; color:var(--ink-faint);";
+      div.textContent = "No folders yet";
+      folderList.appendChild(div);
+    }
+    folders.forEach(f => {
+      const b = document.createElement("button");
+      b.className = "nav-item" + (currentFilter.type==="folder" && currentFilter.value===f ? " active" : "");
+      const count = active.filter(n => (n.folder||"").trim()===f).length;
+      b.innerHTML = `<span style="display:flex;align-items:center;min-width:0;"><span class="folder-dot"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(f)}</span></span><span class="count">${count}</span>`;
+      b.onclick = () => { currentFilter = {type:"folder", value:f}; searchTerm=""; $("searchInput").value=""; render(); goView("list"); };
+      folderList.appendChild(b);
+    });
+
+    const tags = allTags();
+    const tagSection = $("tagSection");
+    if(tags.length){
+      tagSection.style.display = "";
+      const tagList = $("tagList");
+      tagList.innerHTML = "";
+      tags.forEach(t => {
+        const chip = document.createElement("button");
+        chip.className = "tag-chip" + (currentFilter.type==="tag" && currentFilter.value===t ? " active" : "");
+        chip.style.border = "1px solid var(--border)";
+        chip.textContent = "#" + t;
+        chip.onclick = () => { currentFilter = {type:"tag", value:t}; searchTerm=""; $("searchInput").value=""; render(); goView("list"); };
+        tagList.appendChild(chip);
+      });
+    } else {
+      tagSection.style.display = "none";
+    }
+  }
+
+  function listTitleText(){
+    if(searchTerm.trim()) return `Results for "${searchTerm.trim()}"`;
+    if(currentFilter.type === "pinned") return "Pinned";
+    if(currentFilter.type === "trash") return "Trash";
+    if(currentFilter.type === "folder") return currentFilter.value;
+    if(currentFilter.type === "tag") return "#" + currentFilter.value;
+    return "All notes";
+  }
+
+  function renderList(){
+    $("listTitle").textContent = listTitleText();
+    const list = filteredNotes();
+    const container = $("notesList");
+    container.innerHTML = "";
+
+    if(list.length === 0){
+      const div = document.createElement("div");
+      div.className = "empty-list";
+      div.textContent = currentFilter.type === "trash" ? "Trash is empty" : searchTerm.trim() ? "No notes match your search" : "No notes here yet — create one to get started";
+      container.appendChild(div);
+      return;
+    }
+
+    list.forEach(n => {
+      const card = document.createElement("div");
+      card.className = "note-card" + (n.id === activeNoteId ? " active" : "");
+      const title = n.title && n.title.trim() ? n.title : "Untitled note";
+      const snippet = (n.content||"").trim().slice(0,140).replace(/\n+/g," ");
+      const metaBits = [];
+      if(n.folder && n.folder.trim() && currentFilter.type !== "folder") metaBits.push(`<span class="note-card-folder">${escapeHtml(n.folder)}</span>`);
+      metaBits.push(fmtDate(currentFilter.type==="trash" ? n.deletedAt : n.updatedAt));
+      card.innerHTML = `
+        <div class="note-card-top">
+          <div class="note-card-title">${escapeHtml(title)}</div>
+          ${n.pinned && currentFilter.type!=="trash" ? '<svg class="note-card-pin" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.5 5.5L19 9l-4 3.5L16 18l-4-3-4 3 1-5.5-4-3.5 5.5-1.5z"/></svg>' : ""}
+        </div>
+        <div class="note-card-snippet">${escapeHtml(snippet) || '<span style="opacity:0.6">Empty note</span>'}</div>
+        <div class="note-card-meta">${metaBits.join(" · ")}</div>
+      `;
+      if(currentFilter.type === "trash"){
+        const actions = document.createElement("div");
+        actions.style.cssText = "display:flex; gap:8px; margin-top:8px;";
+        const restoreBtn = document.createElement("button");
+        restoreBtn.className = "btn"; restoreBtn.style.cssText="padding:3px 9px; font-size:11.5px;";
+        restoreBtn.textContent = "Restore";
+        restoreBtn.onclick = (e) => { e.stopPropagation(); restoreNote(n.id); };
+        const delBtn = document.createElement("button");
+        delBtn.className = "btn danger"; delBtn.style.cssText="padding:3px 9px; font-size:11.5px;";
+        delBtn.textContent = "Delete forever";
+        delBtn.onclick = (e) => { e.stopPropagation(); confirmModal("Delete permanently?", "This note will be gone for good.", () => permanentlyDelete(n.id)); };
+        actions.appendChild(restoreBtn); actions.appendChild(delBtn);
+        card.appendChild(actions);
+      } else {
+        card.onclick = () => { activeNoteId = n.id; render(); goView("editor"); };
+      }
+      container.appendChild(card);
+    });
+  }
+
+  function renderEditor(){
+    const n = getNote(activeNoteId);
+    if(!n || n.deletedAt){
+      $("editorEmpty").style.display = "flex";
+      $("editorContent").style.display = "none";
+      return;
+    }
+    $("editorEmpty").style.display = "none";
+    $("editorContent").style.display = "flex";
+
+    if(document.activeElement !== $("titleInput")) $("titleInput").value = n.title;
+    if(document.activeElement !== $("editorTextarea")) $("editorTextarea").value = n.content;
+    if(document.activeElement !== $("folderInput")) $("folderInput").value = n.folder || "";
+    if(document.activeElement !== $("tagsInput")) $("tagsInput").value = (n.tags||[]).join(", ");
+
+    $("tbPin").classList.toggle("on", !!n.pinned);
+    $("updatedAt").textContent = "Edited " + fmtDate(n.updatedAt);
+
+    updateCounts();
+    updateGutter();
+    if(previewOn) renderPreview();
+  }
+
+  function renderPreview(){
+    const n = getNote(activeNoteId);
+    if(!n) return;
+    $("previewDiv").innerHTML = renderMarkdown(n.content);
+    $("previewDiv").querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.onclick = (e) => { e.stopPropagation(); toggleCheckboxAtLine(parseInt(cb.dataset.line,10)); };
+    });
+  }
+
+  function updateCounts(){
+    const text = $("editorTextarea").value;
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    $("wordCount").textContent = words + (words===1 ? " word" : " words");
+    $("charCount").textContent = text.length + (text.length===1 ? " char" : " chars");
+  }
+
+  function updateGutter(){
+    const gutter = $("gutter");
+    if(!state.settings.lineNumbers){ gutter.style.display = "none"; return; }
+    gutter.style.display = "block";
+    const lineCount = ($("editorTextarea").value.match(/\n/g)||[]).length + 1;
+    let out = "";
+    for(let i=1;i<=lineCount;i++) out += i + "\n";
+    gutter.textContent = out;
+  }
+
+  // ---------------- Settings / theme ----------------
+  function applySettingsToUI(){
+    document.documentElement.classList.toggle("dark", state.settings.theme === "dark");
+    $("themeLabel").textContent = state.settings.theme === "dark" ? "Light mode" : "Dark mode";
+    $("sortSelect").value = state.settings.sortBy;
+    $("fontFamilySelect").value = state.settings.fontFamily;
+    $("fontSizeLabel").textContent = state.settings.fontSize;
+    applyFontFamily();
+    $("editorTextarea").style.fontSize = state.settings.fontSize + "px";
+    $("previewDiv").style.fontSize = state.settings.fontSize + "px";
+    $("editorTextarea").classList.toggle("nowrap", !state.settings.wordWrap);
+    $("tbWrap").classList.toggle("on", !state.settings.wordWrap ? false : true);
+    $("tbLines").classList.toggle("on", state.settings.lineNumbers);
+  }
+
+  function applyFontFamily(){
+    const map = {
+      sans: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+      serif: 'Georgia, "Iowan Old Style", "Palatino Linotype", serif',
+      mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace'
+    };
+    document.documentElement.style.setProperty("--editor-font", map[state.settings.fontFamily] || map.sans);
+  }
+
+  function showToast(msg){
+    const t = $("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=> t.classList.remove("show"), 2200);
+  }
+
+  function confirmModal(title, body, onConfirm){
+    const root = $("modalRoot");
+    root.innerHTML = "";
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop";
+    backdrop.innerHTML = `
+      <div class="modal">
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(body)}</p>
+        <div class="modal-actions">
+          <button class="btn" id="mCancel">Cancel</button>
+          <button class="btn danger" id="mConfirm">Confirm</button>
+        </div>
+      </div>`;
+    root.appendChild(backdrop);
+    backdrop.querySelector("#mCancel").onclick = () => root.innerHTML = "";
+    backdrop.querySelector("#mConfirm").onclick = () => { root.innerHTML = ""; onConfirm(); };
+    backdrop.onclick = (e) => { if(e.target === backdrop) root.innerHTML = ""; };
+  }
+
+  function exportModal(){
+    const n = getNote(activeNoteId);
+    if(!n) return;
+    const root = $("modalRoot");
+    root.innerHTML = "";
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop";
+    backdrop.innerHTML = `
+      <div class="modal">
+        <h3>Export note</h3>
+        <p>Choose a format to download "${escapeHtml(n.title||"Untitled note")}".</p>
+        <div class="modal-actions" style="justify-content:flex-start; flex-wrap:wrap;">
+          <button class="btn" id="expTxt">.txt</button>
+          <button class="btn" id="expMd">.md</button>
+          <button class="btn" id="expPdf">Print / PDF</button>
+        </div>
+        <div class="modal-actions" style="margin-top:14px;">
+          <button class="btn" id="mClose">Close</button>
+        </div>
+      </div>`;
+    root.appendChild(backdrop);
+    const filenameBase = (n.title||"untitled").trim().replace(/[^\w\-]+/g,"_").slice(0,60) || "untitled";
+    backdrop.querySelector("#expTxt").onclick = () => downloadFile(filenameBase+".txt", n.content, "text/plain");
+    backdrop.querySelector("#expMd").onclick = () => downloadFile(filenameBase+".md", n.content, "text/markdown");
+    backdrop.querySelector("#expPdf").onclick = () => printNote(n);
+    backdrop.querySelector("#mClose").onclick = () => root.innerHTML = "";
+    backdrop.onclick = (e) => { if(e.target === backdrop) root.innerHTML = ""; };
+  }
+
+  function downloadFile(filename, content, mime){
+    const blob = new Blob([content], {type: mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function printNote(n){
+    const w = window.open("", "_blank");
+    w.document.write(`<html><head><title>${escapeHtml(n.title||"Untitled note")}</title>
+      <style>body{font-family:Georgia,serif; max-width:680px; margin:40px auto; padding:0 20px; line-height:1.6; color:#222;} h1{font-size:22px;}</style>
+      </head><body><h1>${escapeHtml(n.title||"Untitled note")}</h1>${renderMarkdown(n.content)}</body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(()=> w.print(), 300);
+  }
+
+  // ---------------- Event wiring ----------------
+  function wireEvents(){
+    $("btnNewNote").onclick = createNote;
+
+    document.querySelectorAll(".nav-item[data-view-filter]").forEach(btn => {
+      btn.onclick = () => { currentFilter = {type:btn.dataset.viewFilter, value:null}; searchTerm=""; $("searchInput").value=""; render(); goView("list"); };
+    });
+
+    $("searchInput").addEventListener("input", (e) => { searchTerm = e.target.value; renderList(); });
+
+    $("sortSelect").onchange = (e) => { state.settings.sortBy = e.target.value; persist(false); renderList(); };
+
+    $("btnTheme").onclick = () => {
+      state.settings.theme = state.settings.theme === "dark" ? "light" : "dark";
+      applySettingsToUI(); persist(false);
+    };
+
+    document.querySelectorAll(".mobile-back").forEach(b => { b.onclick = () => goView(b.dataset.go); });
+
+    $("titleInput").addEventListener("input", (e) => { updateActiveNote({title:e.target.value}); renderList(); });
+    $("editorTextarea").addEventListener("input", (e) => {
+      updateActiveNote({content:e.target.value});
+      updateCounts(); updateGutter();
+      renderList();
+    });
+    $("editorTextarea").addEventListener("scroll", () => { $("gutter").scrollTop = $("editorTextarea").scrollTop; });
+    $("folderInput").addEventListener("input", (e) => { updateActiveNote({folder:e.target.value}); renderSidebar(); renderList(); });
+    $("tagsInput").addEventListener("input", (e) => {
+      const tags = e.target.value.split(",").map(t=>t.trim()).filter(Boolean);
+      updateActiveNote({tags});
+      renderSidebar();
+    });
+
+    $("tbPin").onclick = () => { if(activeNoteId) togglePin(activeNoteId); };
+    $("tbDelete").onclick = () => { if(activeNoteId) confirmModal("Move to trash?", "You can restore this note from Trash within 30 days.", () => softDelete(activeNoteId)); };
+    $("tbExport").onclick = exportModal;
+
+    $("tbWrap").onclick = () => {
+      state.settings.wordWrap = !state.settings.wordWrap;
+      applySettingsToUI(); persist(false);
+    };
+    $("tbLines").onclick = () => {
+      state.settings.lineNumbers = !state.settings.lineNumbers;
+      applySettingsToUI(); updateGutter(); persist(false);
+    };
+    $("fontMinus").onclick = () => { state.settings.fontSize = Math.max(11, state.settings.fontSize-1); applySettingsToUI(); persist(false); };
+    $("fontPlus").onclick = () => { state.settings.fontSize = Math.min(24, state.settings.fontSize+1); applySettingsToUI(); persist(false); };
+    $("fontFamilySelect").onchange = (e) => { state.settings.fontFamily = e.target.value; applySettingsToUI(); persist(false); };
+
+    $("tbPreview").onclick = () => {
+      previewOn = !previewOn;
+      $("tbPreview").classList.toggle("on", previewOn);
+      $("editorTextarea").style.display = previewOn ? "none" : "block";
+      $("previewDiv").style.display = previewOn ? "block" : "none";
+      if(previewOn) renderPreview();
+    };
+
+    $("tbBold").onclick = () => wrapSelection("**","**");
+    $("tbItalic").onclick = () => wrapSelection("*","*");
+    $("tbHeader").onclick = () => prefixLine("## ");
+    $("tbList").onclick = () => prefixLine("- ");
+    $("tbCheck").onclick = () => prefixLine("- [ ] ");
+
+    document.addEventListener("keydown", (e) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if(mod && e.key.toLowerCase()==="n"){ e.preventDefault(); createNote(); }
+      else if(mod && e.key.toLowerCase()==="f"){ e.preventDefault(); goView("list"); $("searchInput").focus(); }
+      else if(mod && e.key.toLowerCase()==="b" && document.activeElement===$("editorTextarea")){ e.preventDefault(); wrapSelection("**","**"); }
+      else if(mod && e.key.toLowerCase()==="i" && document.activeElement===$("editorTextarea")){ e.preventDefault(); wrapSelection("*","*"); }
+    });
+  }
+
+  function wrapSelection(pre, post){
+    const ta = $("editorTextarea");
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const val = ta.value;
+    const selected = val.slice(start, end) || "text";
+    ta.value = val.slice(0,start) + pre + selected + post + val.slice(end);
+    ta.focus();
+    ta.selectionStart = start + pre.length;
+    ta.selectionEnd = start + pre.length + selected.length;
+    ta.dispatchEvent(new Event("input"));
+  }
+
+  function prefixLine(prefix){
+    const ta = $("editorTextarea");
+    const start = ta.selectionStart;
+    const val = ta.value;
+    const lineStart = val.lastIndexOf("\n", start-1) + 1;
+    ta.value = val.slice(0,lineStart) + prefix + val.slice(lineStart);
+    ta.focus();
+    ta.selectionStart = ta.selectionEnd = start + prefix.length;
+    ta.dispatchEvent(new Event("input"));
+  }
+
+  wireEvents();
+  loadState();
+
+  if("serviceWorker" in navigator){
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => { /* offline install still works without SW */ });
+    });
+  }
+})();
+</script>
+</body>
+</html>
